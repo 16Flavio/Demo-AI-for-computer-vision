@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-en="Live video analysis · Flavio Drogo">Analyse vidéo en direct · Flavio Drogo</title>
+  <link rel="icon" href="https://flaviodrogo.be/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://flaviodrogo.be/css/site.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="i18n.js"></script>
+  <style>
+    #scene {
+      position: relative;
+      background: #000;
+      overflow: hidden;
+      aspect-ratio: 16 / 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #video, #dessin {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    #dessin { touch-action: none; cursor: crosshair; }
+    #invite { color: #ccc; text-align: center; padding: 16px; z-index: 1; }
+    #invite[hidden] { display: none; }
+    .compteurs { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 15px; min-height: 1.65em; }
+    label { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="retour" href="./">← <span lang="fr">Démonstrations</span><span lang="en">Demos</span></a>
+    <a class="lang" id="changer-langue" href="?lang=en">EN</a>
+  </header>
+
+  <h1><span lang="fr">Analyse vidéo en direct</span><span lang="en">Live video analysis</span></h1>
+  <p class="lead" lang="fr">
+    Un modèle de détection d'objets (YOLOX-Nano) repère les personnes,
+    voitures, vélos… sur 80 catégories, leur donne un numéro et les compte quand ils franchissent une ligne.
+  </p>
+  <p class="lead" lang="en">
+    An object detection model (YOLOX-Nano) spots people, cars, bikes… across 80 categories,
+    gives each one a number and counts them when they cross a line.
+  </p>
+
+  <p class="demo" lang="fr">La vidéo est analysée sur votre appareil et n'est jamais envoyée.</p>
+  <p class="demo" lang="en">The video is analysed on your device and is never sent anywhere.</p>
+
+  <div class="barre">
+    <button id="camera" class="principal"><span lang="fr">Activer la caméra</span><span lang="en">Turn on the camera</span></button>
+    <button id="exemple"><span lang="fr">Vidéo d'exemple</span><span lang="en">Sample video</span></button>
+    <button id="arreter" disabled><span lang="fr">Arrêter</span><span lang="en">Stop</span></button>
+    <label><input type="checkbox" id="optimise"> <span lang="fr">Modèle optimisé (int8)</span><span lang="en">Optimised model (int8)</span></label>
+    <button id="effacer-ligne"><span lang="fr">Effacer la ligne</span><span lang="en">Clear the line</span></button>
+  </div>
+
+  <div id="scene" class="large">
+    <video id="video" playsinline muted loop></video>
+    <canvas id="dessin"></canvas>
+    <p id="invite"><span lang="fr">Activez la caméra ou lancez la vidéo d'exemple.<br>
+      Ensuite, tracez une ligne de comptage en glissant sur l'image.</span><span lang="en">Turn on the camera or play the sample video.<br>
+      Then draw a counting line by dragging across the image.</span></p>
+  </div>
+
+  <div class="chiffres">
+    <div class="chiffre"><div class="valeur" id="fps">·</div><div class="libelle"><span lang="fr">images par seconde</span><span lang="en">frames per second</span></div></div>
+    <div class="chiffre"><div class="valeur" id="inference">·</div><div class="libelle"><span lang="fr">temps du modèle</span><span lang="en">model time</span></div></div>
+    <div class="chiffre"><div class="valeur" id="nb-objets">·</div><div class="libelle"><span lang="fr">objets à l'écran</span><span lang="en">objects on screen</span></div></div>
+    <div class="chiffre gain"><div class="valeur" id="total">0</div><div class="libelle"><span lang="fr">passages de la ligne</span><span lang="en">line crossings</span></div></div>
+  </div>
+  <div class="compteurs" id="compteurs"></div>
+  <p class="statut" id="statut"></p>
+
+  <h2><span lang="fr">Comment ça marche ?</span><span lang="en">How does it work?</span></h2>
+  <p lang="fr">
+    Chaque image de la vidéo est réduite à 416 × 416 pixels et passée au modèle
+    <a href="https://github.com/Megvii-BaseDetection/YOLOX">YOLOX-Nano</a> (licence Apache 2.0, 3,7 Mo),
+    exécuté par <a href="https://onnxruntime.ai/">ONNX Runtime Web</a>.
+    Un suivi simple associe les cadres d'une image à l'autre selon leur recouvrement, ce qui permet de
+    numéroter les objets et de compter ceux qui traversent la ligne.
+  </p>
+  <p lang="en">
+    Each video frame is scaled down to 416 × 416 pixels and fed to the
+    <a href="https://github.com/Megvii-BaseDetection/YOLOX">YOLOX-Nano</a> model (Apache 2.0 licence, 3.7 MB),
+    run by <a href="https://onnxruntime.ai/">ONNX Runtime Web</a>.
+    A simple tracker matches the boxes from one frame to the next according to how much they overlap, which makes it
+    possible to number the objects and count those that cross the line.
+  </p>
+  <p lang="fr">
+    Le modèle « optimisé » est quantifié : ses poids et ses calculs passent en entiers sur 8 bits au lieu de
+    nombres à virgule sur 32 bits. Il est trois fois plus léger à télécharger (1,2 Mo au lieu de 3,7 Mo).
+    Le gain de vitesse dépend du navigateur : dans mes mesures, le modèle optimisé calcule une image en 22 ms
+    au lieu de 37 ms avec le moteur de Chrome, mais il est un peu plus lent que le modèle normal dans Firefox
+    (20 ms au lieu de 16 ms). Comparez le compteur d'images par seconde. Les toutes premières couches, qui reçoivent
+    l'image brute, restent en virgule flottante : les quantifier faisait perdre près de la moitié des objets.
+    Le modèle optimisé retrouve environ 9 objets sur 10 du modèle normal, avec des scores un peu plus bas.
+  </p>
+  <p lang="en">
+    The “optimised” model is quantised: its weights and computations use 8-bit integers instead of
+    32-bit floating-point numbers. It is three times smaller to download (1.2 MB instead of 3.7 MB).
+    The speed gain depends on the browser: in my measurements, the optimised model processes a frame in 22 ms
+    instead of 37 ms with Chrome's engine, but it is slightly slower than the normal model in Firefox
+    (20 ms instead of 16 ms). Compare the frames per second counter. The very first layers, which receive
+    the raw image, stay in floating point: quantising them lost almost half of the objects.
+    The optimised model finds about 9 out of 10 of the normal model's objects, with slightly lower scores.
+  </p>
+
+  <footer><span lang="fr">Vidéo d'exemple :</span><span lang="en">Sample video:</span>
+    <a href="https://commons.wikimedia.org/wiki/File:DiagonalCrosswalkYongeDundas.webm">Diagonal crosswalk, Yonge-Dundas</a>,
+    Wikimedia Commons, <span lang="fr">domaine public (CC0)</span><span lang="en">public domain (CC0)</span>.</footer>
+
+  <script src="vendor/onnxruntime-web-1.30.0/ort.wasm.min.js"></script>
+  <script>
+    // URL absolue : ONNX Runtime charge ces fichiers par import(), qui refuse les chemins relatifs nus
+    ort.env.wasm.wasmPaths = new URL("vendor/onnxruntime-web-1.30.0/", location.href).href;
+    // Plusieurs fils d'exécution si la page est isolée (en-têtes COOP/COEP envoyés par le serveur)
+    ort.env.wasm.numThreads = crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
+
+    const TAILLE = 416;
+    const SEUIL_SCORE = 0.4;
+    const SEUIL_NMS = 0.45;
+    const CLASSES = [
+      "personne", "vélo", "voiture", "moto", "avion", "bus", "train", "camion", "bateau", "feu tricolore",
+      "bouche d'incendie", "panneau stop", "parcmètre", "banc", "oiseau", "chat", "chien", "cheval", "mouton", "vache",
+      "éléphant", "ours", "zèbre", "girafe", "sac à dos", "parapluie", "sac à main", "cravate", "valise", "frisbee",
+      "skis", "snowboard", "ballon", "cerf-volant", "batte de baseball", "gant de baseball", "skateboard", "planche de surf", "raquette", "bouteille",
+      "verre à vin", "tasse", "fourchette", "couteau", "cuillère", "bol", "banane", "pomme", "sandwich", "orange",
+      "brocoli", "carotte", "hot-dog", "pizza", "donut", "gâteau", "chaise", "canapé", "plante", "lit",
+      "table", "toilettes", "télévision", "ordinateur portable", "souris", "télécommande", "clavier", "téléphone", "micro-ondes", "four",
+      "grille-pain", "évier", "réfrigérateur", "livre", "horloge", "vase", "ciseaux", "ours en peluche", "sèche-cheveux", "brosse à dents",
+    ];
+    const CLASSES_EN = [
+      "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
+      "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+      "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+      "skis", "snowboard", "ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "racket", "bottle",
+      "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+      "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed",
+      "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven",
+      "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush",
+    ];
+    const NOMS = t(CLASSES, CLASSES_EN);
+
+    const $ = (id) => document.getElementById(id);
+    const video = $("video");
+    const dessin = $("dessin");
+    const ctx = dessin.getContext("2d");
+
+    function statut(texte, erreur = false) {
+      $("statut").textContent = texte;
+      $("statut").classList.toggle("erreur", erreur);
+    }
+
+    // ---------- 1. Modèles (chargés une seule fois, à la demande) ----------
+    const sessions = {};
+    async function session() {
+      const nom = $("optimise").checked ? "yolox_nano_int8.onnx" : "yolox_nano.onnx";
+      if (!sessions[nom]) {
+        statut(t("Chargement du modèle…", "Loading the model…"));
+        sessions[nom] = await ort.InferenceSession.create("modeles/" + nom, { executionProviders: ["wasm"] });
+        statut("");
+      }
+      return sessions[nom];
+    }
+
+    // ---------- 2. Préparer une image pour le modèle ----------
+    const tampon = document.createElement("canvas");
+    tampon.width = tampon.height = TAILLE;
+    const ctxTampon = tampon.getContext("2d", { willReadFrequently: true });
+
+    function preparer() {
+      const echelle = Math.min(TAILLE / video.videoWidth, TAILLE / video.videoHeight);
+      ctxTampon.fillStyle = "rgb(114,114,114)";            // fond gris attendu par YOLOX
+      ctxTampon.fillRect(0, 0, TAILLE, TAILLE);
+      ctxTampon.drawImage(video, 0, 0, video.videoWidth * echelle, video.videoHeight * echelle);
+      const pixels = ctxTampon.getImageData(0, 0, TAILLE, TAILLE).data;
+
+      // RGBA entrelacé -> 3 plans B, G, R (format attendu par YOLOX), valeurs 0-255
+      const n = TAILLE * TAILLE;
+      const donnees = new Float32Array(3 * n);
+      for (let i = 0; i < n; i++) {
+        donnees[i] = pixels[4 * i + 2];
+        donnees[n + i] = pixels[4 * i + 1];
+        donnees[2 * n + i] = pixels[4 * i];
+      }
+      return { tenseur: new ort.Tensor("float32", donnees, [1, 3, TAILLE, TAILLE]), echelle };
+    }
+
+    // ---------- 3. Décoder la sortie du modèle ----------
+    // La sortie [1, 3549, 85] couvre 3 grilles (52², 26², 13²) : x, y, l, h, objet, 80 scores de classe
+    const GRILLE = [];
+    for (const pas of [8, 16, 32]) {
+      const n = TAILLE / pas;
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) GRILLE.push([x, y, pas]);
+    }
+
+    function iou(a, b) {
+      const x1 = Math.max(a.x1, b.x1), y1 = Math.max(a.y1, b.y1);
+      const x2 = Math.min(a.x2, b.x2), y2 = Math.min(a.y2, b.y2);
+      const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+      const union = (a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - inter;
+      return union > 0 ? inter / union : 0;
+    }
+
+    function decoder(sortie, echelle) {
+      const candidats = [];
+      for (let i = 0; i < GRILLE.length; i++) {
+        const o = i * 85;
+        const objet = sortie[o + 4];
+        if (objet < SEUIL_SCORE) continue;
+        let classe = 0, meilleur = 0;
+        for (let c = 0; c < 80; c++) if (sortie[o + 5 + c] > meilleur) { meilleur = sortie[o + 5 + c]; classe = c; }
+        const score = objet * meilleur;
+        if (score < SEUIL_SCORE) continue;
+        const [gx, gy, pas] = GRILLE[i];
+        const cx = (sortie[o] + gx) * pas / echelle, cy = (sortie[o + 1] + gy) * pas / echelle;
+        const l = Math.exp(sortie[o + 2]) * pas / echelle, h = Math.exp(sortie[o + 3]) * pas / echelle;
+        candidats.push({ x1: cx - l / 2, y1: cy - h / 2, x2: cx + l / 2, y2: cy + h / 2, score, classe });
+      }
+      // Suppression des doublons (NMS) : on garde le meilleur cadre parmi ceux qui se recouvrent
+      candidats.sort((a, b) => b.score - a.score);
+      const gardes = [];
+      for (const c of candidats) {
+        if (gardes.every((g) => g.classe !== c.classe || iou(g, c) < SEUIL_NMS)) gardes.push(c);
+      }
+      return gardes;
+    }
+
+    // ---------- 4. Suivi : associer les cadres d'une image à l'autre ----------
+    let pistes = [];
+    let prochainNumero = 1;
+
+    function suivre(detections) {
+      const paires = [];
+      pistes.forEach((p, i) => detections.forEach((d, j) => {
+        if (p.classe === d.classe) {
+          const r = iou(p, d);
+          if (r > 0.25) paires.push([r, i, j]);
+        }
+      }));
+      paires.sort((a, b) => b[0] - a[0]);   // les recouvrements les plus forts d'abord
+
+      const pisteUtilisee = new Set(), detectionUtilisee = new Set();
+      for (const [, i, j] of paires) {
+        if (pisteUtilisee.has(i) || detectionUtilisee.has(j)) continue;
+        pisteUtilisee.add(i);
+        detectionUtilisee.add(j);
+        const p = pistes[i];
+        p.ancienCentre = centre(p);
+        Object.assign(p, detections[j], { perdue: 0 });
+        verifierPassage(p);
+      }
+      pistes.forEach((p, i) => { if (!pisteUtilisee.has(i)) p.perdue++; });
+      pistes = pistes.filter((p) => p.perdue < 10);   // oubliée après 10 images sans détection
+      detections.forEach((d, j) => {
+        if (!detectionUtilisee.has(j)) pistes.push({ ...d, numero: prochainNumero++, perdue: 0 });
+      });
+    }
+
+    const centre = (b) => ({ x: (b.x1 + b.x2) / 2, y: (b.y1 + b.y2) / 2 });
+
+    // ---------- 5. Ligne de comptage ----------
+    let ligne = null;          // { a: {x, y}, b: {x, y} } en pixels de la vidéo
+    let traceEnCours = null;
+    const passages = {};       // classe -> nombre
+
+    function cote(p, a, b) { return Math.sign((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)); }
+
+    function verifierPassage(p) {
+      if (!ligne || !p.ancienCentre) return;
+      const avant = p.ancienCentre, apres = centre(p);
+      const croise = cote(avant, ligne.a, ligne.b) !== cote(apres, ligne.a, ligne.b)
+                  && cote(ligne.a, avant, apres) !== cote(ligne.b, avant, apres);
+      if (croise && !p.compte) {
+        p.compte = true;   // chaque objet n'est compté qu'une fois
+        passages[p.classe] = (passages[p.classe] || 0) + 1;
+        afficherPassages();
+      }
+    }
+
+    function afficherPassages() {
+      const total = Object.values(passages).reduce((a, b) => a + b, 0);
+      $("total").textContent = total;
+      $("compteurs").innerHTML = Object.entries(passages)
+        .sort((a, b) => b[1] - a[1])
+        .map(([c, n]) => `<span><strong>${n}</strong> ${NOMS[c]}</span>`).join("");
+    }
+
+    function positionVideo(e) {
+      // convertit la position du pointeur en pixels de la vidéo (l'image est centrée, « contain »)
+      const r = dessin.getBoundingClientRect();
+      const echelle = Math.min(r.width / dessin.width, r.height / dessin.height);
+      const decalX = (r.width - dessin.width * echelle) / 2, decalY = (r.height - dessin.height * echelle) / 2;
+      return { x: (e.clientX - r.left - decalX) / echelle, y: (e.clientY - r.top - decalY) / echelle };
+    }
+
+    dessin.addEventListener("pointerdown", (e) => {
+      if (!enCours) return;
+      dessin.setPointerCapture(e.pointerId);
+      traceEnCours = { a: positionVideo(e), b: positionVideo(e) };
+    });
+    dessin.addEventListener("pointermove", (e) => { if (traceEnCours) traceEnCours.b = positionVideo(e); });
+    dessin.addEventListener("pointerup", () => {
+      if (traceEnCours && Math.hypot(traceEnCours.b.x - traceEnCours.a.x, traceEnCours.b.y - traceEnCours.a.y) > 10) {
+        ligne = traceEnCours;
+        for (const k in passages) delete passages[k];
+        for (const p of pistes) p.compte = false;
+        afficherPassages();
+      }
+      traceEnCours = null;
+    });
+    $("effacer-ligne").addEventListener("click", () => {
+      ligne = null;
+      for (const k in passages) delete passages[k];
+      afficherPassages();
+    });
+
+    // ---------- 6. Dessin ----------
+    function couleur(numero) { return `hsl(${(numero * 67) % 360} 90% 55%)`; }
+
+    function dessiner() {
+      ctx.clearRect(0, 0, dessin.width, dessin.height);
+      const epaisseur = Math.max(2, dessin.width / 320);
+      ctx.lineWidth = epaisseur;
+      ctx.font = `600 ${Math.max(12, dessin.width / 45)}px system-ui, sans-serif`;
+      for (const p of pistes) {
+        if (p.perdue > 0) continue;
+        ctx.strokeStyle = ctx.fillStyle = couleur(p.numero);
+        ctx.strokeRect(p.x1, p.y1, p.x2 - p.x1, p.y2 - p.y1);
+        const texte = `#${p.numero} ${NOMS[p.classe]} ${Math.round(p.score * 100)} %`;
+        const largeur = ctx.measureText(texte).width + 8;
+        const hauteur = parseInt(ctx.font.split(" ")[1]) + 6;
+        ctx.fillRect(p.x1, Math.max(0, p.y1 - hauteur), largeur, hauteur);
+        ctx.fillStyle = "#000";
+        ctx.fillText(texte, p.x1 + 4, Math.max(0, p.y1 - hauteur) + hauteur - 6);
+      }
+      for (const l of [ligne, traceEnCours]) {
+        if (!l) continue;
+        ctx.strokeStyle = "#ffd400";
+        ctx.lineWidth = epaisseur * 2;
+        ctx.setLineDash([epaisseur * 4, epaisseur * 3]);
+        ctx.beginPath();
+        ctx.moveTo(l.a.x, l.a.y);
+        ctx.lineTo(l.b.x, l.b.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // ---------- 7. Boucle temps réel ----------
+    let enCours = false;
+    let fps = 0, dernier = 0;
+
+    async function boucle() {
+      if (!enCours) return;
+      if (video.readyState >= 2 && video.videoWidth) {
+        if (dessin.width !== video.videoWidth) {
+          dessin.width = video.videoWidth;
+          dessin.height = video.videoHeight;
+        }
+        const s = await session();
+        const { tenseur, echelle } = preparer();
+        const debut = performance.now();
+        const sortie = await s.run({ images: tenseur });
+        const duree = performance.now() - debut;
+        const detections = decoder(sortie[s.outputNames[0]].data, echelle);
+        suivre(detections);
+        dessiner();
+
+        const maintenant = performance.now();
+        if (dernier) fps = fps ? 0.9 * fps + 0.1 * (1000 / (maintenant - dernier)) : 1000 / (maintenant - dernier);
+        dernier = maintenant;
+        $("fps").textContent = nombre(fps, 1);
+        $("inference").textContent = Math.round(duree) + " ms";
+        $("nb-objets").textContent = detections.length;
+      }
+      requestAnimationFrame(boucle);
+    }
+
+    function demarrer() {
+      $("invite").hidden = true;
+      $("arreter").disabled = false;
+      pistes = [];
+      fps = 0;
+      dernier = 0;
+      if (!enCours) {
+        enCours = true;
+        boucle().catch((e) => { statut(t("Erreur : ", "Error: ") + e.message, true); arreter(); });
+      }
+    }
+
+    function arreter() {
+      enCours = false;
+      video.pause();
+      if (video.srcObject) video.srcObject.getTracks().forEach((t) => t.stop());
+      video.srcObject = null;
+      $("arreter").disabled = true;
+      ctx.clearRect(0, 0, dessin.width, dessin.height);
+    }
+
+    $("camera").addEventListener("click", async () => {
+      try {
+        const flux = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "environment" }, audio: false,
+        });
+        video.removeAttribute("src");
+        video.srcObject = flux;
+        await video.play();
+        statut("");
+        demarrer();
+      } catch (e) {
+        statut(t("Caméra indisponible ou refusée. Essayez la vidéo d'exemple.", "Camera unavailable or access denied. Try the sample video."), true);
+      }
+    });
+
+    $("exemple").addEventListener("click", async () => {
+      if (video.srcObject) { video.srcObject.getTracks().forEach((t) => t.stop()); video.srcObject = null; }
+      video.src = "videos/exemple.webm";
+      try {
+        await video.play();
+        statut("");
+        demarrer();
+      } catch (e) {
+        statut(t("Impossible de lire la vidéo d'exemple.", "Unable to play the sample video."), true);
+      }
+    });
+
+    $("arreter").addEventListener("click", arreter);
+    $("optimise").addEventListener("change", () => { fps = 0; dernier = 0; });
+  </script>
+</body>
+</html>

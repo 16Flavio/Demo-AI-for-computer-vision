@@ -1,0 +1,2 @@
+# Dépendances supplémentaires du script de téléchargement (quantification int8)
+onnx

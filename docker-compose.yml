@@ -5,4 +5,19 @@ services:
       - "127.0.0.1:2028:8000"
     volumes:
       - ./models:/app/models:ro
+    environment:
+      - LLM_URL=http://llm:8080
+    depends_on:
+      - llm
+    restart: unless-stopped
+
+  # LLM de la démo RAG : aucun port publié, seule l'API y accède via le réseau interne
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    volumes:
+      - ./models/llm:/models:ro
+    command: >
+      -m /models/Qwen3-4B-Instruct-2507-Q4_K_M.gguf
+      --host 0.0.0.0 --port 8080
+      --ctx-size 4096 --parallel 1
     restart: unless-stopped

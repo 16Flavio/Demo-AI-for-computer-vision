@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-en="Questions about a PDF · Flavio Drogo">Questions sur un PDF · Flavio Drogo</title>
+  <link rel="icon" href="https://flaviodrogo.be/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://flaviodrogo.be/css/site.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="i18n.js"></script>
+  <style>
+    #question { flex: 1; min-width: 200px; }
+    .suggestions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .suggestions[hidden] { display: none; }
+    .suggestions button { font-size: 14px; padding: 3px 10px; color: var(--body); }
+    #reponse { white-space: pre-wrap; min-height: 3em; padding: 14px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+    #reponse:empty::before { content: "La réponse s'affichera ici."; color: var(--muted); }
+    html[lang="en"] #reponse:empty::before { content: "The answer will appear here."; }
+    .curseur::after { content: "▍"; animation: clignote 1s steps(2) infinite; }
+    @keyframes clignote { 50% { opacity: 0; } }
+    .citation {
+      display: inline-block;
+      font-size: 0.75em;
+      font-weight: 700;
+      padding: 0 5px;
+      margin: 0 1px;
+      border-radius: 2px;
+      background: var(--surligne);
+      color: var(--ink);
+      cursor: pointer;
+      vertical-align: 1px;
+    }
+    .passage { padding: 14px 8px; border-top: 1px solid var(--rule); font-size: 15px; transition: background 0.3s; }
+    .passage .entete { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    .passage .entete strong { color: var(--ink); }
+    .passage.cite { background: var(--surligne); }
+    .passage.eclair { outline: 2px solid var(--accent); }
+    .passage.non-cite { opacity: 0.6; }
+    #document-info { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="retour" href="./">← <span lang="fr">Démonstrations</span><span lang="en">Demos</span></a>
+    <a class="lang" id="changer-langue" href="?lang=en">EN</a>
+  </header>
+
+  <h1><span lang="fr">Questions sur un PDF</span><span lang="en">Questions about a PDF</span></h1>
+  <p class="lead" lang="fr">
+    Envoyez un PDF (20 pages maximum) et posez une question : le modèle de langage répond
+    à partir du document, en citant les passages utilisés.
+  </p>
+  <p class="lead" lang="en">
+    Send a PDF (20 pages maximum) and ask a question: the language model answers
+    from the document, citing the passages it used.
+  </p>
+
+  <p class="demo" lang="fr">Le PDF est gardé en mémoire le temps de votre visite (30 minutes au plus),
+    jamais écrit sur le disque, et n'est envoyé à aucun service externe.</p>
+  <p class="demo" lang="en">The PDF is kept in memory for the length of your visit (30 minutes at most),
+    never written to disk, and never sent to any external service.</p>
+
+  <div class="barre">
+    <input type="file" id="fichier" accept="application/pdf">
+    <button id="exemple"><span lang="fr">Essayer avec un PDF d'exemple</span><span lang="en">Try with a sample PDF</span></button>
+    <a href="exemple.pdf" target="_blank"><span lang="fr">voir l'exemple</span><span lang="en">view the sample</span></a>
+  </div>
+  <p class="statut" id="statut-doc"></p>
+
+  <form class="barre" id="formulaire">
+    <input type="text" id="question" placeholder="Votre question sur le document…"
+           data-en-placeholder="Your question about the document…" maxlength="500" disabled>
+    <button class="principal" id="envoyer" disabled><span lang="fr">Demander</span><span lang="en">Ask</span></button>
+  </form>
+  <div class="suggestions" id="suggestions" hidden>
+    <!-- Le PDF d'exemple est en français : une question dans l'autre langue montre que le modèle suit la langue de la question -->
+    <button type="button" lang="fr">Combien de jours de congé ont les coursiers ?</button>
+    <button type="button" lang="fr">Que faire en cas d'accident ?</button>
+    <button type="button" lang="fr">Quel est le salaire horaire et quelles primes existent ?</button>
+    <button type="button" lang="fr">What equipment does the cooperative provide?</button>
+    <button type="button" lang="en">How many days of leave do the couriers get?</button>
+    <button type="button" lang="en">What should I do in case of an accident?</button>
+    <button type="button" lang="en">What is the hourly wage and which bonuses exist?</button>
+    <button type="button" lang="en">Quel matériel la coopérative fournit-elle ?</button>
+  </div>
+
+  <h2><span lang="fr">Réponse</span><span lang="en">Answer</span></h2>
+  <div id="reponse"></div>
+  <p class="statut" id="statut"></p>
+
+  <h2><span lang="fr">Passages retrouvés</span><span lang="en">Retrieved passages</span></h2>
+  <div id="passages"></div>
+
+  <h2><span lang="fr">Comment ça marche ?</span><span lang="en">How does it work?</span></h2>
+  <p lang="fr">
+    Le texte du PDF est extrait (<a href="https://pypdf.readthedocs.io/">pypdf</a>) puis découpé en passages
+    d'environ 120 mots. Chaque passage est transformé en vecteur par le modèle
+    <a href="https://huggingface.co/intfloat/multilingual-e5-small">multilingual-e5-small</a>.
+    Pour une question, les 4 passages les plus proches (similarité cosinus) sont envoyés au modèle de langage
+    <a href="https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507">Qwen3-4B-Instruct</a>, quantifié en 4 bits
+    et exécuté par <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a>.
+    La réponse s'affiche au fur et à mesure de sa génération.
+  </p>
+  <p lang="en">
+    The text of the PDF is extracted (<a href="https://pypdf.readthedocs.io/">pypdf</a>) and split into passages
+    of about 120 words. Each passage is turned into a vector by the
+    <a href="https://huggingface.co/intfloat/multilingual-e5-small">multilingual-e5-small</a> model.
+    For a question, the 4 closest passages (cosine similarity) are sent to the language model
+    <a href="https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507">Qwen3-4B-Instruct</a>, quantised to 4 bits
+    and run by <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a>.
+    The answer is displayed as it is being generated.
+  </p>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let documentId = null;
+    let passages = [];
+
+    function statut(id, texte, erreur = false) {
+      $(id).textContent = texte;
+      $(id).classList.toggle("erreur", erreur);
+    }
+
+    async function messageErreur(reponse) {
+      try {
+        const r = await reponse.json();
+        return typeof r.detail === "string" ? traduireErreur(r.detail) : t("requête invalide.", "invalid request.");
+      } catch {
+        return t("erreur ", "error ") + reponse.status;
+      }
+    }
+
+    // ---------- Envoi du PDF ----------
+    async function envoyer(fichier, nom) {
+      if (fichier.size > 10 * 1024 * 1024) {
+        statut("statut-doc", t("Fichier trop volumineux (maximum 10 Mo).", "File too large (maximum 10 MB)."), true);
+        return;
+      }
+      oublierDocument();
+      statut("statut-doc", t("Lecture et indexation du document…", "Reading and indexing the document…"));
+      $("question").disabled = $("envoyer").disabled = true;
+
+      const formulaire = new FormData();
+      formulaire.append("fichier", fichier, nom);
+      try {
+        const reponse = await fetch("/api/rag/document", { method: "POST", body: formulaire });
+        if (!reponse.ok) {
+          statut("statut-doc", t("Erreur : ", "Error: ") + await messageErreur(reponse), true);
+          return;
+        }
+        const d = await reponse.json();
+        documentId = d.id;
+        statut("statut-doc", t(`« ${d.nom} » prêt : ${d.pages} page(s), ${d.passages} passages.`,
+                               `“${d.nom}” ready: ${d.pages} page(s), ${d.passages} passages.`));
+        $("question").disabled = $("envoyer").disabled = false;
+        $("suggestions").hidden = nom !== "exemple.pdf";
+        $("question").focus();
+      } catch {
+        statut("statut-doc", t("Erreur : le serveur ne répond pas.", "Error: the server is not responding."), true);
+      }
+    }
+
+    function oublierDocument() {
+      if (documentId) fetch("/api/rag/document/" + documentId, { method: "DELETE", keepalive: true });
+      documentId = null;
+    }
+    window.addEventListener("pagehide", oublierDocument);
+
+    $("fichier").addEventListener("change", (e) => {
+      if (e.target.files[0]) envoyer(e.target.files[0], e.target.files[0].name);
+    });
+
+    $("exemple").addEventListener("click", async () => {
+      const reponse = await fetch("exemple.pdf");
+      envoyer(await reponse.blob(), "exemple.pdf");
+    });
+
+    $("suggestions").addEventListener("click", (e) => {
+      if (e.target.tagName !== "BUTTON") return;
+      $("question").value = e.target.textContent;
+      $("formulaire").requestSubmit();
+    });
+
+    // ---------- Affichage ----------
+    function echapper(texte) {
+      const div = document.createElement("div");
+      div.textContent = texte;
+      return div.innerHTML;
+    }
+
+    function afficherPassages() {
+      $("passages").innerHTML = passages.map((p, i) => `
+        <div class="passage" id="passage-${i + 1}">
+          <div class="entete"><strong>[${i + 1}]</strong> page ${p.page}, ${t("similarité", "similarity")} ${nombre(p.score, 2)}</div>
+          ${echapper(p.texte)}
+        </div>`).join("");
+    }
+
+    function citationsDe(texte) {
+      return new Set([...texte.matchAll(/\[(\d+)\]/g)].map((m) => Number(m[1])).filter((n) => n >= 1 && n <= passages.length));
+    }
+
+    function afficherReponse(texte, fini) {
+      // Les citations [n] deviennent des étiquettes cliquables, et les passages cités sont surlignés
+      $("reponse").innerHTML = echapper(texte).replace(/\[(\d+)\]/g, (m, n) =>
+        Number(n) >= 1 && Number(n) <= passages.length ? `<span class="citation" data-n="${n}">${n}</span>` : m);
+      $("reponse").classList.toggle("curseur", !fini);
+      const cites = citationsDe(texte);
+      passages.forEach((_, i) => {
+        const el = $("passage-" + (i + 1));
+        el.classList.toggle("cite", cites.has(i + 1));
+        el.classList.toggle("non-cite", fini && cites.size > 0 && !cites.has(i + 1));
+      });
+    }
+
+    $("reponse").addEventListener("click", (e) => {
+      const n = e.target.dataset?.n;
+      if (!n) return;
+      const el = $("passage-" + n);
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("eclair");
+      setTimeout(() => el.classList.remove("eclair"), 1200);
+    });
+
+    // ---------- Question et réponse en streaming ----------
+    $("formulaire").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const question = $("question").value.trim();
+      if (!documentId || question.length < 2) return;
+
+      $("envoyer").disabled = true;
+      $("reponse").textContent = "";
+      $("passages").innerHTML = "";
+      statut("statut", t("Recherche des passages…", "Searching for passages…"));
+      let texte = "";
+      const debut = performance.now();
+      let premierMot = null;
+
+      try {
+        const reponse = await fetch("/api/rag/question", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ document: documentId, question }),
+        });
+        if (!reponse.ok) {
+          statut("statut", t("Erreur : ", "Error: ") + await messageErreur(reponse), true);
+          return;
+        }
+
+        // La réponse arrive en lignes JSON, au fur et à mesure de la génération
+        const lecteur = reponse.body.pipeThrough(new TextDecoderStream()).getReader();
+        let reste = "";
+        while (true) {
+          const { value, done } = await lecteur.read();
+          if (done) break;
+          reste += value;
+          const lignes = reste.split("\n");
+          reste = lignes.pop();
+          for (const ligne of lignes) {
+            if (!ligne) continue;
+            const m = JSON.parse(ligne);
+            if (m.passages) {
+              passages = m.passages;
+              afficherPassages();
+              statut("statut", t("Génération de la réponse…", "Generating the answer…"));
+            } else if (m.attente) {
+              statut("statut", t("Une autre réponse est en cours de génération, vous êtes dans la file d'attente…",
+                                 "Another answer is being generated, you are in the queue…"));
+            } else if (m.texte) {
+              if (premierMot === null) {
+                premierMot = (performance.now() - debut) / 1000;
+                statut("statut", t("Génération de la réponse…", "Generating the answer…"));
+              }
+              texte += m.texte;
+              afficherReponse(texte, false);
+            } else if (m.erreur) {
+              statut("statut", t("Erreur : ", "Error: ") + traduireErreur(m.erreur), true);
+            } else if (m.fin) {
+              const total = (performance.now() - debut) / 1000;
+              const premier = premierMot === null ? "?" : nombre(premierMot, 1);
+              statut("statut", t(`Premier mot après ${premier} s, réponse complète en ${nombre(total, 1)} s.`,
+                                 `First word after ${premier} s, full answer in ${nombre(total, 1)} s.`));
+            }
+          }
+        }
+        afficherReponse(texte, true);
+      } catch {
+        statut("statut", t("Erreur : la connexion au serveur a été interrompue.", "Error: the connection to the server was interrupted."), true);
+        $("reponse").classList.remove("curseur");
+      } finally {
+        $("envoyer").disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

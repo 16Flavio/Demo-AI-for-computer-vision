@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-en="Delivery routes · Flavio Drogo">Tournées de livraison · Flavio Drogo</title>
+  <link rel="icon" href="https://flaviodrogo.be/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://flaviodrogo.be/css/site.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="i18n.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    #carte {
+      height: min(60vh, 520px);
+      min-height: 320px;
+      border: 1px solid var(--rule);
+      z-index: 0;
+    }
+    .depot-icone {
+      background: var(--ink);
+      color: var(--paper);
+      border-radius: 3px;
+      font-weight: 700;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .legende { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 15px; }
+    .legende span::before {
+      content: "";
+      display: inline-block;
+      width: 12px; height: 12px;
+      border-radius: 2px;
+      margin-right: 6px;
+      vertical-align: -1px;
+      background: var(--c);
+    }
+    label { white-space: nowrap; }
+    input[type=number] { width: 4.5em; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="retour" href="./">← <span lang="fr">Démonstrations</span><span lang="en">Demos</span></a>
+    <a class="lang" id="changer-langue" href="?lang=en">EN</a>
+  </header>
+
+  <h1><span lang="fr">Tournées de livraison</span><span lang="en">Delivery routes</span></h1>
+  <p class="lead" lang="fr">
+    Cliquez sur la carte : le premier point est le dépôt (D), les suivants sont les livraisons.
+    Cliquez sur un point pour le retirer. Choisissez le nombre de véhicules, puis « Optimiser ».
+  </p>
+  <p class="lead" lang="en">
+    Click on the map: the first point is the depot (D), the following ones are deliveries.
+    Click on a point to remove it. Choose the number of vehicles, then “Optimise”.
+  </p>
+
+  <div class="barre">
+    <button id="exemple"><span lang="fr">Exemple (20 points)</span><span lang="en">Example (20 points)</span></button>
+    <button id="placer-depot"><span lang="fr">Déplacer le dépôt</span><span lang="en">Move the depot</span></button>
+    <button id="effacer"><span lang="fr">Tout effacer</span><span lang="en">Clear all</span></button>
+    <label><span lang="fr">Véhicules</span><span lang="en">Vehicles</span> <input type="number" id="vehicules" min="1" max="10" value="3"></label>
+    <label title="Nombre maximum de livraisons par véhicule. Vide : réparti automatiquement."
+           data-en-title="Maximum number of deliveries per vehicle. Empty: split automatically.">
+      <span lang="fr">Capacité</span><span lang="en">Capacity</span> <input type="number" id="capacite" min="1" max="50" placeholder="auto"></label>
+    <button id="optimiser" class="principal"><span lang="fr">Optimiser</span><span lang="en">Optimise</span></button>
+  </div>
+
+  <div id="carte" class="large"></div>
+
+  <div class="barre">
+    <label><input type="checkbox" id="voir-naif"> <span lang="fr">Afficher le trajet naïf (ordre de saisie)</span><span lang="en">Show the naive route (order of entry)</span></label>
+    <span class="statut" id="statut"></span>
+  </div>
+
+  <div class="chiffres">
+    <div class="chiffre"><div class="valeur" id="nb-points">0</div><div class="libelle"><span lang="fr">livraisons (max 49)</span><span lang="en">deliveries (max 49)</span></div></div>
+    <div class="chiffre"><div class="valeur" id="dist-opt">·</div><div class="libelle"><span lang="fr">distance optimisée</span><span lang="en">optimised distance</span></div></div>
+    <div class="chiffre"><div class="valeur" id="dist-naive">·</div><div class="libelle"><span lang="fr">trajet naïf</span><span lang="en">naive route</span></div></div>
+    <div class="chiffre gain"><div class="valeur" id="gain">·</div><div class="libelle"><span lang="fr">distance économisée</span><span lang="en">distance saved</span></div></div>
+    <div class="chiffre"><div class="valeur" id="duree">·</div><div class="libelle"><span lang="fr">temps de calcul</span><span lang="en">computation time</span></div></div>
+  </div>
+  <div class="legende" id="legende"></div>
+
+  <h2><span lang="fr">Comment ça marche ?</span><span lang="en">How does it work?</span></h2>
+  <p lang="fr">
+    Les distances à vol d'oiseau entre tous les points sont calculées (formule de Haversine),
+    puis le solveur <a href="https://developers.google.com/optimization">Google OR-Tools</a> cherche
+    l'ensemble de tournées le plus court qui respecte la capacité de chaque véhicule
+    (problème de tournées de véhicules, ou <em>VRP</em>). Le trajet naïf visite les points dans l'ordre
+    où vous les avez placés. Le calcul est limité à une seconde.
+  </p>
+  <p lang="en">
+    The straight-line distances between all points are computed (haversine formula), then the
+    <a href="https://developers.google.com/optimization">Google OR-Tools</a> solver looks for the shortest
+    set of routes that respects each vehicle's capacity (the vehicle routing problem, or <em>VRP</em>).
+    The naive route visits the points in the order you placed them. The computation is limited to one second.
+  </p>
+
+  <footer><span lang="fr">Fonds de carte © contributeurs</span><span lang="en">Map data © contributors of</span> <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>.</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const MAX_LIVRAISONS = 49;
+    const COULEURS = ["#2f6f9f", "#c0562b", "#3f8a4f", "#9a4d8f", "#c79220",
+                      "#2a8c8c", "#6a5acd", "#a8324a", "#5f7f1f", "#4a5560"];
+
+    // 20 points d'exemple dans Bruxelles (dépôt à la gare du Midi)
+    const EXEMPLE = {
+      depot: [50.8357, 4.3360],
+      livraisons: [
+        [50.8467, 4.3525], [50.8504, 4.3488], [50.8389, 4.3755], [50.8263, 4.3725],
+        [50.8619, 4.3441], [50.8336, 4.3020], [50.8530, 4.3800], [50.8146, 4.3546],
+        [50.8442, 4.3990], [50.8686, 4.3712], [50.8226, 4.3390], [50.8577, 4.3208],
+        [50.8812, 4.3565], [50.8285, 4.3963], [50.8094, 4.3818], [50.8408, 4.3600],
+        [50.8648, 4.3036], [50.8017, 4.3250], [50.8730, 4.3934], [50.8195, 4.4140],
+      ],
+    };
+
+    // ---------- Carte ----------
+    const carte = L.map("carte").setView([50.8466, 4.3528], 13);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(carte);
+
+    let depot = null;          // marqueur du dépôt
+    let livraisons = [];       // marqueurs des livraisons
+    let calques = L.layerGroup().addTo(carte);   // tournées dessinées
+    let calqueNaif = L.layerGroup();
+    let modeDepot = false;
+
+    const $ = (id) => document.getElementById(id);
+
+    function statut(texte, erreur = false) {
+      $("statut").textContent = texte;
+      $("statut").classList.toggle("erreur", erreur);
+    }
+
+    function effacerResultats() {
+      calques.clearLayers();
+      calqueNaif.clearLayers();
+      for (const id of ["dist-opt", "dist-naive", "gain", "duree"]) $(id).textContent = "·";
+      $("legende").innerHTML = "";
+      for (const m of livraisons) m.setStyle({ color: "#555", fillColor: "#999" }).unbindTooltip();
+    }
+
+    function placerDepot(latlng) {
+      if (depot) depot.remove();
+      depot = L.marker(latlng, {
+        icon: L.divIcon({ className: "depot-icone", html: "D", iconSize: [22, 22] }),
+        zIndexOffset: 1000,
+      }).addTo(carte).bindTooltip(t("Dépôt", "Depot"));
+    }
+
+    function ajouterLivraison(latlng) {
+      if (livraisons.length >= MAX_LIVRAISONS) {
+        statut(t(`Maximum ${MAX_LIVRAISONS} livraisons.`, `Maximum ${MAX_LIVRAISONS} deliveries.`), true);
+        return;
+      }
+      const m = L.circleMarker(latlng, { radius: 7, weight: 2, color: "#555", fillColor: "#999", fillOpacity: 0.9 })
+        .addTo(carte);
+      m.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        m.remove();
+        livraisons = livraisons.filter((x) => x !== m);
+        majCompteur();
+        effacerResultats();
+      });
+      livraisons.push(m);
+      majCompteur();
+    }
+
+    function majCompteur() {
+      $("nb-points").textContent = livraisons.length;
+    }
+
+    carte.on("click", (e) => {
+      if (!depot || modeDepot) {
+        placerDepot(e.latlng);
+        modeDepot = false;
+        $("placer-depot").classList.remove("actif");
+      } else {
+        ajouterLivraison(e.latlng);
+      }
+      effacerResultats();
+      statut("");
+    });
+
+    $("placer-depot").addEventListener("click", () => {
+      modeDepot = !modeDepot;
+      $("placer-depot").classList.toggle("actif", modeDepot);
+      statut(modeDepot ? t("Cliquez sur la carte pour placer le dépôt.", "Click on the map to place the depot.") : "");
+    });
+
+    function toutEffacer() {
+      if (depot) depot.remove();
+      depot = null;
+      for (const m of livraisons) m.remove();
+      livraisons = [];
+      majCompteur();
+      effacerResultats();
+      statut("");
+    }
+    $("effacer").addEventListener("click", toutEffacer);
+
+    $("exemple").addEventListener("click", () => {
+      toutEffacer();
+      placerDepot(EXEMPLE.depot);
+      for (const p of EXEMPLE.livraisons) ajouterLivraison(L.latLng(p));
+      carte.fitBounds(L.latLngBounds([EXEMPLE.depot, ...EXEMPLE.livraisons]).pad(0.1));
+    });
+
+    $("voir-naif").addEventListener("change", (e) => {
+      if (e.target.checked) calqueNaif.addTo(carte);
+      else calqueNaif.remove();
+    });
+
+    // ---------- Optimisation ----------
+    const km = (m) => nombre(m / 1000, 1) + " km";
+    const coord = (ll) => [ll.lat, ll.lng];
+
+    function dessiner(tournees, calque, style) {
+      const positionDepot = depot.getLatLng();
+      tournees.forEach((tr, v) => {
+        const chemin = [positionDepot, ...tr.points.map((i) => livraisons[i - 1].getLatLng()), positionDepot];
+        L.polyline(chemin, { color: COULEURS[v % COULEURS.length], ...style }).addTo(calque);
+      });
+    }
+
+    $("optimiser").addEventListener("click", async () => {
+      if (!depot || livraisons.length === 0) {
+        statut(t("Placez d'abord un dépôt et au moins une livraison (ou cliquez sur « Exemple »).",
+                 "First place a depot and at least one delivery (or click “Example”)."), true);
+        return;
+      }
+      effacerResultats();
+      statut(t("Calcul en cours…", "Computing…"));
+      $("optimiser").disabled = true;
+
+      const corps = {
+        depot: coord(depot.getLatLng()),
+        livraisons: livraisons.map((m) => coord(m.getLatLng())),
+        vehicules: Number($("vehicules").value) || 1,
+      };
+      if ($("capacite").value) corps.capacite = Number($("capacite").value);
+
+      try {
+        const reponse = await fetch("/api/tournees", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(corps),
+        });
+        const r = await reponse.json();
+        if (!reponse.ok) {
+          const detail = Array.isArray(r.detail) ? t("paramètres invalides.", "invalid parameters.") : traduireErreur(r.detail);
+          statut(t("Erreur : ", "Error: ") + detail, true);
+          return;
+        }
+
+        dessiner(r.tournees, calques, { weight: 4, opacity: 0.85 });
+        dessiner(r.naif, calqueNaif, { weight: 2, opacity: 0.6, dashArray: "6 6", color: "#777" });
+
+        r.tournees.forEach((tr, v) => {
+          tr.points.forEach((i, rang) => {
+            livraisons[i - 1]
+              .setStyle({ color: COULEURS[v % COULEURS.length], fillColor: COULEURS[v % COULEURS.length] })
+              .bindTooltip(t(`Véhicule ${v + 1}, arrêt ${rang + 1}`, `Vehicle ${v + 1}, stop ${rang + 1}`));
+          });
+        });
+
+        $("dist-opt").textContent = km(r.distance_optimisee_m);
+        $("dist-naive").textContent = km(r.distance_naive_m);
+        $("gain").textContent = nombre(r.gain_pourcent, 1) + " %";
+        $("duree").textContent = nombre(r.duree_s, 2) + " s";
+        $("legende").innerHTML = r.tournees.map((tr, v) =>
+          `<span style="--c:${COULEURS[v % COULEURS.length]}">${t(`Véhicule ${v + 1} : ${tr.points.length} arrêts`, `Vehicle ${v + 1}: ${tr.points.length} stops`)}, ${km(tr.distance_m)}</span>`
+        ).join("");
+        statut(t(`Capacité utilisée : ${r.capacite} livraisons max par véhicule.`,
+                 `Capacity used: at most ${r.capacite} deliveries per vehicle.`));
+      } catch {
+        statut(t("Erreur : le serveur ne répond pas.", "Error: the server is not responding."), true);
+      } finally {
+        $("optimiser").disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+/* Complément du style du site principal (https://flaviodrogo.be/css/site.css, chargé avant ce fichier) :
+   seulement les éléments propres aux démos. */
+:root {
+  --on-accent: #fbfbfa;
+  --succes: #2e6b4a;
+  --erreur: #a23a2a;
+  --surligne: #f3e6b3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --on-accent: #141517;
+    --succes: #8cc7a4;
+    --erreur: #e59a8c;
+    --surligne: #4a4123;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* Zone plus large que la colonne de texte (carte, vidéo, scène 3D) */
+.large {
+  --largeur: min(960px, calc(100vw - 32px));
+  width: var(--largeur);
+  margin-left: calc((100% - var(--largeur)) / 2);
+}
+
+.cadre {
+  border: 1px solid var(--rule);
+}
+
+button {
+  padding: 7px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+button:hover { border-color: var(--muted); }
+
+button.principal {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.actif { border-color: var(--accent); color: var(--accent); }
+
+input,
+select,
+textarea {
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+
+label { font-size: 15px; }
+
+.barre {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 16px 0;
+}
+
+.statut {
+  min-height: 1.65em;
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.statut.erreur { color: var(--erreur); }
+
+/* Chiffres clés, sous un filet comme les articles */
+.chiffres {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0 20px;
+  margin: 24px 0;
+}
+
+.chiffre {
+  padding: 12px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.chiffre .valeur {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.chiffre .libelle {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.chiffre.gain .valeur { color: var(--succes); }
+
+footer {
+  margin-top: 72px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Bouton de retour, à la place de l'en-tête du site principal */
+.retour {
+  display: inline-block;
+  padding: 6px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--ink);
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.retour:hover { border-color: var(--muted); }
+
+/* Deux langues dans chaque page (voir i18n.js) : seule la langue active est affichée */
+html[lang="fr"] body [lang="en"],
+html[lang="en"] body [lang="fr"] {
+  display: none !important;
+}

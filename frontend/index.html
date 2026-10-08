@@ -3,169 +3,82 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Démonstration de la carte de profondeur 3D</title>
+  <title data-en="Demos · Flavio Drogo">Démonstrations · Flavio Drogo</title>
+  <meta name="description" content="Planification de tournées, analyse vidéo, estimation de profondeur et questions sur un document PDF. Delivery route planning, video analysis, depth estimation and questions about a PDF.">
+  <link rel="icon" href="https://flaviodrogo.be/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://flaviodrogo.be/css/site.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="i18n.js"></script>
   <style>
-    body {
-      font-family: system-ui, sans-serif;
-      max-width: 900px;
-      margin: 40px auto;
-      padding: 0 16px;
-      background: #f5f5f5;
-      color: #222;
-    }
-    img { border-radius: 8px; }
-    #scene {
-      width: 100%;
-      height: 500px;
-      margin-top: 16px;
-      border-radius: 8px;
-      overflow: hidden;
-    }
+    article h3 a { color: var(--ink); text-decoration: none; }
+    article h3 a:hover { color: var(--accent); text-decoration: underline; }
   </style>
 </head>
 <body>
-  <h1>Passage de la photo à une projection 3D</h1>
+  <header>
+    <a class="retour" href="https://flaviodrogo.be/" data-en-href="https://flaviodrogo.be/en/">←
+      <span lang="fr">Retour</span><span lang="en">Back</span></a>
+    <a class="lang" id="changer-langue" href="?lang=en">EN</a>
+  </header>
 
-  <p>Choisissez une photo, ou cliquez sur l'exemple :</p>
-  <input type="file" id="choix" accept="image/*">
-  <img id="exemple" src="DemoImage.png" width="120"
-       style="cursor: pointer; border: 2px solid #ccc;"
-       title="Essayer avec cette photo">
+  <main>
+    <h1><span lang="fr">Démonstrations</span><span lang="en">Demos</span></h1>
+    <p class="lead" lang="fr">
+      Voici plusieurs démonstrations de ce que je peux développer pour vous. Un aspect plus optimisation avec
+      les tournées de livraison, un aspect plus vision par ordinateur avec l'analyse vidéo en direct et
+      l'estimation de profondeur, et un aspect traitement du langage avec un modèle de langage capable de lire
+      des documents PDF. Je suis ouvert à n'importe quelle question, et le code est disponible sur
+      mon <a href="https://github.com/16Flavio">profil GitHub</a>.
+    </p>
+    <p class="lead" lang="en">
+      Here are several demos of what I can build for you. Optimisation with delivery route planning,
+      computer vision with live video analysis and depth estimation, and language processing with a language
+      model that can read PDF documents. I am happy to answer any question, and the code is available on
+      my <a href="https://github.com/16Flavio">GitHub profile</a>.
+    </p>
 
-  <p id="statut"></p>
-  <img id="photo" width="200">
-  <img id="carte" width="200">
-  <div id="scene"></div>
+    <h2><span lang="fr">À essayer</span><span lang="en">Try them</span></h2>
+    <article>
+      <span class="muted"><span lang="fr">Planification</span><span lang="en">Planning</span></span>
+      <h3><a href="tournees.html"><span lang="fr">Tournées de livraison</span><span lang="en">Delivery routes</span></a></h3>
+      <p lang="fr">Placez un dépôt et des adresses sur une carte, choisissez le nombre de véhicules : le programme
+        répartit les arrêts, calcule les trajets les plus courts et montre la distance gagnée par rapport
+        à un ordre de passage naïf.</p>
+      <p lang="en">Place a depot and some addresses on a map and choose the number of vehicles: the program
+        assigns the stops, computes the shortest routes and shows the distance saved compared with
+        a naive visiting order.</p>
+    </article>
+    <article>
+      <span class="muted"><span lang="fr">Analyse d'images</span><span lang="en">Image analysis</span></span>
+      <h3><a href="webcam.html"><span lang="fr">Analyse vidéo en direct</span><span lang="en">Live video analysis</span></a></h3>
+      <p lang="fr">Le programme repère les personnes, les véhicules et les objets filmés, les suit d'une image à l'autre
+        et compte ceux qui franchissent une ligne. La vidéo reste sur votre appareil.</p>
+      <p lang="en">The program spots the people, vehicles and objects on camera, follows them from one frame to the next
+        and counts those that cross a line. The video stays on your device.</p>
+    </article>
+    <article>
+      <span class="muted"><span lang="fr">Recherche dans des documents</span><span lang="en">Document search</span></span>
+      <h3><a href="rag.html"><span lang="fr">Questions sur un PDF</span><span lang="en">Questions about a PDF</span></a></h3>
+      <p lang="fr">Envoyez un document et posez une question en langage courant. La réponse cite les passages utilisés,
+        pour que vous puissiez vérifier d'où vient l'information.</p>
+      <p lang="en">Send a document and ask a question in plain language. The answer cites the passages it used,
+        so you can check where the information comes from.</p>
+    </article>
+    <article>
+      <span class="muted"><span lang="fr">Analyse d'images</span><span lang="en">Image analysis</span></span>
+      <h3><a href="profondeur.html"><span lang="fr">D'une photo à une scène 3D</span><span lang="en">From a photo to a 3D scene</span></a></h3>
+      <p lang="fr">Un modèle estime la distance de chaque point d'une photo, qui devient une scène en relief
+        que l'on fait tourner à la souris.</p>
+      <p lang="en">A model estimates how far away each point of a photo is, and the photo becomes a 3D scene
+        that you can rotate with the mouse.</p>
+    </article>
 
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
-      }
-    }
-  </script>
-
-  <script type="module">
-    import * as THREE from "three";
-    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-
-    // ---------- 1. Préparer la scène 3D (une seule fois) ----------
-    const conteneur = document.getElementById("scene");
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111);
-
-    const camera = new THREE.PerspectiveCamera(
-      50, conteneur.clientWidth / conteneur.clientHeight, 0.01, 100);
-    camera.position.set(0, 0, 2);
-
-    const rendu = new THREE.WebGLRenderer({ antialias: true });
-    rendu.outputColorSpace = THREE.LinearSRGBColorSpace;  // garde les couleurs de la photo
-    rendu.setSize(conteneur.clientWidth, conteneur.clientHeight);
-    conteneur.appendChild(rendu.domElement);
-
-    const controles = new OrbitControls(camera, rendu.domElement);  // rotation à la souris
-    controles.enableDamping = true;
-
-    function animer() {
-      requestAnimationFrame(animer);   // redessine la scène à chaque image de l'écran
-      controles.update();
-      rendu.render(scene, camera);
-    }
-    animer();
-
-    let nuage = null;
-
-    // ---------- 2. Outils pour lire les images ----------
-    function chargerImage(blob) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.src = URL.createObjectURL(blob);
-      });
-    }
-
-    function lirePixels(img, largeur, hauteur) {
-      const canvas = document.createElement("canvas");
-      canvas.width = largeur;
-      canvas.height = hauteur;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, largeur, hauteur);
-      return ctx.getImageData(0, 0, largeur, hauteur).data;  // [R, G, B, A, R, G, B, A, ...]
-    }
-
-    // ---------- 3. Construire le nuage de points ----------
-    function afficherNuage(photo, carte) {
-      const l = carte.width;
-      const h = carte.height;
-      const couleursPhoto = lirePixels(photo, l, h);
-      const valeursCarte = lirePixels(carte, l, h);
-      const ratio = photo.naturalWidth / photo.naturalHeight;
-
-      const positions = new Float32Array(l * h * 3);
-      const couleurs = new Float32Array(l * h * 3);
-
-      for (let j = 0; j < h; j++) {
-        for (let i = 0; i < l; i++) {
-          const k = j * l + i;   // numéro du point
-          const p = k * 4;       // position du pixel dans les tableaux RGBA
-
-          positions[3 * k]     = (i / l - 0.5) * ratio;        // x
-          positions[3 * k + 1] = 0.5 - j / h;                  // y
-          positions[3 * k + 2] = valeursCarte[p] / 255 * 0.2;  // z : profondeur
-
-          couleurs[3 * k]     = couleursPhoto[p] / 255;
-          couleurs[3 * k + 1] = couleursPhoto[p + 1] / 255;
-          couleurs[3 * k + 2] = couleursPhoto[p + 2] / 255;
-        }
-      }
-
-      const geometrie = new THREE.BufferGeometry();
-      geometrie.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      geometrie.setAttribute("color", new THREE.BufferAttribute(couleurs, 3));
-      const materiau = new THREE.PointsMaterial({ size: 0.004, vertexColors: true });
-
-      if (nuage) {                 // supprime le nuage précédent
-        scene.remove(nuage);
-        nuage.geometry.dispose();
-        nuage.material.dispose();
-      }
-      nuage = new THREE.Points(geometrie, materiau);
-      scene.add(nuage);
-    }
-
-    // ---------- 4. Envoyer la photo et afficher le résultat ----------
-    async function traiter(fichier) {
-      document.getElementById("photo").src = URL.createObjectURL(fichier);
-      document.getElementById("statut").textContent = "Calcul en cours…";
-
-      const formulaire = new FormData();
-      formulaire.append("fichier", fichier);
-      const reponse = await fetch("/api/depth", { method: "POST", body: formulaire });
-
-      if (!reponse.ok) {
-        document.getElementById("statut").textContent = "Erreur : " + reponse.status;
-        return;
-      }
-
-      const carte = await reponse.blob();
-      document.getElementById("carte").src = URL.createObjectURL(carte);
-
-      const photoImg = await chargerImage(fichier);
-      const carteImg = await chargerImage(carte);
-      afficherNuage(photoImg, carteImg);
-
-      document.getElementById("statut").textContent = "Terminé ! Faites tourner la scène à la souris.";
-    }
-
-    document.getElementById("choix").addEventListener("change", (evenement) => {
-      traiter(evenement.target.files[0]);
-    });
-
-    document.getElementById("exemple").addEventListener("click", async () => {
-      const reponse = await fetch("DemoImage.png");
-      traiter(await reponse.blob());
-    });
-  </script>
+    <p class="demo" lang="fr">Une de ces démonstrations ressemble à votre situation ?
+      <a href="mailto:contact@flaviodrogo.be">Écrivez-moi</a> en quelques lignes, ou revenez sur
+      <a href="https://flaviodrogo.be/">flaviodrogo.be</a>.</p>
+    <p class="demo" lang="en">Does one of these demos look like your situation?
+      <a href="mailto:contact@flaviodrogo.be">Write to me</a> in a few lines, or go back to
+      <a href="https://flaviodrogo.be/en/">flaviodrogo.be</a>.</p>
+  </main>
 </body>
 </html>

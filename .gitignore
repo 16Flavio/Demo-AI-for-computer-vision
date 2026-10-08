@@ -11,3 +11,6 @@ node_modules/
 frontend/dist/
 
 result_*.png
+frontend/modeles/
+frontend/videos/
+frontend/vendor/

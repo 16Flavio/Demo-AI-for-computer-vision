@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-en="From a photo to a 3D scene · Flavio Drogo">D'une photo à une scène 3D · Flavio Drogo</title>
+  <link rel="icon" href="https://flaviodrogo.be/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://flaviodrogo.be/css/site.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="i18n.js"></script>
+  <style>
+    .exemples {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 10px;
+      margin: 16px 0;
+    }
+    .exemples button {
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      border: 1px solid var(--rule);
+      border-radius: 0;
+      overflow: hidden;
+      text-align: left;
+    }
+    .exemples button:hover, .exemples button.actif { border-color: var(--accent); }
+    .exemples img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+    .exemples button > span { padding: 4px 8px; overflow: hidden; color: var(--body); font-size: 13px; white-space: nowrap; text-overflow: ellipsis; }
+    .resultat { display: flex; gap: 10px; }
+    .resultat img { max-width: calc(50% - 5px); max-height: 220px; }
+    .resultat img:not([src]) { display: none; }
+    #scene { height: min(70vh, 560px); margin-top: 16px; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="retour" href="./">← <span lang="fr">Démonstrations</span><span lang="en">Demos</span></a>
+    <a class="lang" id="changer-langue" href="?lang=en">EN</a>
+  </header>
+
+  <h1><span lang="fr">D'une photo à une scène 3D</span><span lang="en">From a photo to a 3D scene</span></h1>
+  <p class="lead" lang="fr">
+    Un modèle estime à quelle distance se trouve chaque pixel d'une photo. Chaque pixel devient alors un point
+    placé en relief : faites tourner la scène à la souris, ou au doigt sur téléphone.
+  </p>
+  <p class="lead" lang="en">
+    A model estimates how far away each pixel of a photo is. Each pixel then becomes a point placed in depth:
+    rotate the scene with the mouse, or with your finger on a phone.
+  </p>
+
+  <p lang="fr">Choisissez un exemple, ou envoyez votre propre photo.</p>
+  <p lang="en">Pick an example, or send your own photo.</p>
+  <div class="exemples" id="exemples">
+    <button data-src="exemples/rue.jpg"><img src="exemples/rue.jpg" alt=""><span><span lang="fr">Rue de village</span><span lang="en">Village street</span></span></button>
+    <button data-src="exemples/escalier.jpg"><img src="exemples/escalier.jpg" alt=""><span><span lang="fr">Métro</span><span lang="en">Underground</span></span></button>
+    <button data-src="exemples/foret.jpg"><img src="exemples/foret.jpg" alt=""><span><span lang="fr">Forêt</span><span lang="en">Forest</span></span></button>
+    <button data-src="exemples/chien.jpg"><img src="exemples/chien.jpg" alt=""><span><span lang="fr">Chien</span><span lang="en">Dog</span></span></button>
+    <button data-src="DemoImage.png"><img src="DemoImage.png" alt=""><span><span lang="fr">Route</span><span lang="en">Road</span></span></button>
+  </div>
+  <div class="barre"><input type="file" id="choix" accept="image/*"></div>
+  <p class="demo" lang="fr">Votre photo est envoyée à mon serveur pour le calcul, puis oubliée : elle n'est jamais écrite
+    sur le disque, ni envoyée à un service externe.</p>
+  <p class="demo" lang="en">Your photo is sent to my server for the computation, then forgotten: it is never written
+    to disk, nor sent to any external service.</p>
+
+  <p class="statut" id="statut"></p>
+  <div class="resultat">
+    <img id="photo" alt="Photo envoyée" data-en-alt="Photo sent">
+    <img id="carte" alt="Carte de profondeur : plus c'est clair, plus c'est proche" data-en-alt="Depth map: the lighter, the closer">
+  </div>
+  <div id="scene" class="large cadre"></div>
+
+  <h2><span lang="fr">Comment ça marche ?</span><span lang="en">How does it work?</span></h2>
+  <p lang="fr">
+    Le modèle <a href="https://huggingface.co/depth-anything/Depth-Anything-V2-Small">Depth Anything V2 Small</a>
+    (licence Apache 2.0) calcule une carte de profondeur : plus un pixel est clair, plus il est proche.
+    La couleur et la profondeur de chaque pixel donnent ensuite un nuage de points,
+    affiché avec <a href="https://threejs.org/">three.js</a>.
+  </p>
+  <p lang="en">
+    The <a href="https://huggingface.co/depth-anything/Depth-Anything-V2-Small">Depth Anything V2 Small</a> model
+    (Apache 2.0 licence) computes a depth map: the lighter a pixel, the closer it is.
+    The colour and depth of each pixel then give a point cloud,
+    displayed with <a href="https://threejs.org/">three.js</a>.
+  </p>
+
+  <footer>
+    <span lang="fr">Photos d'exemple sur Wikimedia Commons, domaine public (CC0) :</span>
+    <span lang="en">Sample photos from Wikimedia Commons, public domain (CC0):</span>
+    <a href="https://commons.wikimedia.org/wiki/File:Fr%C5%93schwiller_Rue_Principale_Perspective_2.jpg">Torsade de Pointes</a>,
+    <a href="https://commons.wikimedia.org/wiki/File:A_staircase_at_Embankment_tube_station.jpg">Robert-brook</a>,
+    <a href="https://commons.wikimedia.org/wiki/File:Forest_Away_Path.jpg">Seaq68</a>,
+    <a href="https://commons.wikimedia.org/wiki/File:Black_dog_face_close_up.webp">HS61</a>.
+  </footer>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    // ---------- 1. Préparer la scène 3D (une seule fois) ----------
+    const conteneur = document.getElementById("scene");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x141517);
+
+    const camera = new THREE.PerspectiveCamera(
+      50, conteneur.clientWidth / conteneur.clientHeight, 0.01, 100);
+    camera.position.set(0, 0, 2);
+
+    const rendu = new THREE.WebGLRenderer({ antialias: true });
+    rendu.outputColorSpace = THREE.LinearSRGBColorSpace;  // garde les couleurs de la photo
+    rendu.setSize(conteneur.clientWidth, conteneur.clientHeight);
+    conteneur.appendChild(rendu.domElement);
+
+    const controles = new OrbitControls(camera, rendu.domElement);  // rotation à la souris
+    controles.enableDamping = true;
+
+    function animer() {
+      requestAnimationFrame(animer);   // redessine la scène à chaque image de l'écran
+      controles.update();
+      rendu.render(scene, camera);
+    }
+    animer();
+
+    let nuage = null;
+
+    // ---------- 2. Outils pour lire les images ----------
+    function chargerImage(blob) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = URL.createObjectURL(blob);
+      });
+    }
+
+    function lirePixels(img, largeur, hauteur) {
+      const canvas = document.createElement("canvas");
+      canvas.width = largeur;
+      canvas.height = hauteur;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, largeur, hauteur);
+      return ctx.getImageData(0, 0, largeur, hauteur).data;  // [R, G, B, A, R, G, B, A, ...]
+    }
+
+    // ---------- 3. Construire le nuage de points ----------
+    function afficherNuage(photo, carte) {
+      const l = carte.width;
+      const h = carte.height;
+      const couleursPhoto = lirePixels(photo, l, h);
+      const valeursCarte = lirePixels(carte, l, h);
+      const ratio = photo.naturalWidth / photo.naturalHeight;
+
+      const positions = new Float32Array(l * h * 3);
+      const couleurs = new Float32Array(l * h * 3);
+
+      for (let j = 0; j < h; j++) {
+        for (let i = 0; i < l; i++) {
+          const k = j * l + i;   // numéro du point
+          const p = k * 4;       // position du pixel dans les tableaux RGBA
+
+          positions[3 * k]     = (i / l - 0.5) * ratio;        // x
+          positions[3 * k + 1] = 0.5 - j / h;                  // y
+          positions[3 * k + 2] = valeursCarte[p] / 255 * 0.3;  // z : profondeur
+
+          couleurs[3 * k]     = couleursPhoto[p] / 255;
+          couleurs[3 * k + 1] = couleursPhoto[p + 1] / 255;
+          couleurs[3 * k + 2] = couleursPhoto[p + 2] / 255;
+        }
+      }
+
+      const geometrie = new THREE.BufferGeometry();
+      geometrie.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometrie.setAttribute("color", new THREE.BufferAttribute(couleurs, 3));
+      const materiau = new THREE.PointsMaterial({ size: 0.004, vertexColors: true });
+
+      if (nuage) {                 // supprime le nuage précédent
+        scene.remove(nuage);
+        nuage.geometry.dispose();
+        nuage.material.dispose();
+      }
+      nuage = new THREE.Points(geometrie, materiau);
+      scene.add(nuage);
+    }
+
+    // ---------- 4. Envoyer la photo et afficher le résultat ----------
+    async function traiter(fichier) {
+      document.getElementById("photo").src = URL.createObjectURL(fichier);
+      document.getElementById("statut").textContent = t("Calcul en cours…", "Computing…");
+
+      const formulaire = new FormData();
+      formulaire.append("fichier", fichier);
+      const reponse = await fetch("/api/depth", { method: "POST", body: formulaire });
+
+      if (!reponse.ok) {
+        let detail = t("erreur ", "error ") + reponse.status;
+        try { detail = traduireErreur((await reponse.json()).detail) || detail; } catch {}
+        document.getElementById("statut").textContent = t("Erreur : ", "Error: ") + detail;
+        return;
+      }
+
+      const carte = await reponse.blob();
+      document.getElementById("carte").src = URL.createObjectURL(carte);
+
+      const photoImg = await chargerImage(fichier);
+      const carteImg = await chargerImage(carte);
+      afficherNuage(photoImg, carteImg);
+
+      document.getElementById("statut").textContent = t("Terminé. Faites tourner la scène à la souris ou au doigt.",
+                                                         "Done. Rotate the scene with the mouse or your finger.");
+    }
+
+    document.getElementById("choix").addEventListener("change", (evenement) => {
+      traiter(evenement.target.files[0]);
+    });
+
+    document.getElementById("exemples").addEventListener("click", async (evenement) => {
+      const bouton = evenement.target.closest("button");
+      if (!bouton) return;
+      for (const b of document.querySelectorAll("#exemples button")) b.classList.toggle("actif", b === bouton);
+      const reponse = await fetch(bouton.dataset.src);
+      traiter(await reponse.blob());
+    });
+  </script>
+</body>
+</html>
