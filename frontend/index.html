@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Démonstration du modèle de profondeur</title>
+</head>
+<body>
+  <h1>Passage de la photo à la carte de profondeur</h1>
+
+  <p>Choisissez une photo, ou cliquez sur l'exemple :</p>
+  <input type="file" id="choix" accept="image/*">
+  <img id="exemple" src="DemoImage.png" width="120"
+       style="cursor: pointer; border: 2px solid #ccc;"
+       title="Essayer avec cette photo">
+
+  <p id="statut"></p>
+  <img id="photo" width="400">
+  <img id="carte" width="400">
+
+  <script>
+    async function traiter(fichier) {
+      document.getElementById("photo").src = URL.createObjectURL(fichier);
+      document.getElementById("statut").textContent = "Calcul en cours…";
+
+      const formulaire = new FormData();
+      formulaire.append("fichier", fichier);
+      const reponse = await fetch("/api/depth", { method: "POST", body: formulaire });
+      const carte = await reponse.blob();
+
+      document.getElementById("carte").src = URL.createObjectURL(carte);
+      document.getElementById("statut").textContent = "Terminé !";
+    }
+
+    document.getElementById("choix").addEventListener("change", (evenement) => {
+      traiter(evenement.target.files[0]);
+    });
+
+    document.getElementById("exemple").addEventListener("click", async () => {
+      const reponse = await fetch("DemoImage.png");
+      const fichier = await reponse.blob();
+      traiter(fichier);
+    });
+  </script>
+</body>
+</html>
