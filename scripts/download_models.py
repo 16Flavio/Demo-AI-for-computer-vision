@@ -8,7 +8,7 @@ def main():
     path = hf_hub_download(
         repo_id = "onnx-community/depth-anything-v2-small",
         filename = "onnx/model.onnx",
-        local_dir = MODELS_DIR / "depht-anything-v2-small",
+        local_dir = MODELS_DIR / "depth-anything-v2-small",
     )
 
     print(f"Model downloaded : {path}")
