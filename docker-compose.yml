@@ -1,0 +1,8 @@
+services:
+  labo:
+    build: .
+    ports:
+      - "127.0.0.1:2028:8000"
+    volumes:
+      - ./models:/app/models:ro
+    restart: unless-stopped
