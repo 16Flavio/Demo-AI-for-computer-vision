@@ -1,0 +1,13 @@
+models/
+*.onnx
+
+.venv/
+__pycache__/
+*.__pycache__
+
+.env
+
+node_modules/
+frontend/dist/
+
+result_*.png
