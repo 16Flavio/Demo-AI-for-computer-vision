@@ -2,10 +2,29 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <title>Démonstration du modèle de profondeur</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Démonstration de la carte de profondeur 3D</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 16px;
+      background: #f5f5f5;
+      color: #222;
+    }
+    img { border-radius: 8px; }
+    #scene {
+      width: 100%;
+      height: 500px;
+      margin-top: 16px;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+  </style>
 </head>
 <body>
-  <h1>Passage de la photo à la carte de profondeur</h1>
+  <h1>Passage de la photo à une projection 3D</h1>
 
   <p>Choisissez une photo, ou cliquez sur l'exemple :</p>
   <input type="file" id="choix" accept="image/*">
@@ -14,10 +33,108 @@
        title="Essayer avec cette photo">
 
   <p id="statut"></p>
-  <img id="photo" width="400">
-  <img id="carte" width="400">
+  <img id="photo" width="200">
+  <img id="carte" width="200">
+  <div id="scene"></div>
 
-  <script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    // ---------- 1. Préparer la scène 3D (une seule fois) ----------
+    const conteneur = document.getElementById("scene");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111111);
+
+    const camera = new THREE.PerspectiveCamera(
+      50, conteneur.clientWidth / conteneur.clientHeight, 0.01, 100);
+    camera.position.set(0, 0, 2);
+
+    const rendu = new THREE.WebGLRenderer({ antialias: true });
+    rendu.outputColorSpace = THREE.LinearSRGBColorSpace;  // garde les couleurs de la photo
+    rendu.setSize(conteneur.clientWidth, conteneur.clientHeight);
+    conteneur.appendChild(rendu.domElement);
+
+    const controles = new OrbitControls(camera, rendu.domElement);  // rotation à la souris
+    controles.enableDamping = true;
+
+    function animer() {
+      requestAnimationFrame(animer);   // redessine la scène à chaque image de l'écran
+      controles.update();
+      rendu.render(scene, camera);
+    }
+    animer();
+
+    let nuage = null;
+
+    // ---------- 2. Outils pour lire les images ----------
+    function chargerImage(blob) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = URL.createObjectURL(blob);
+      });
+    }
+
+    function lirePixels(img, largeur, hauteur) {
+      const canvas = document.createElement("canvas");
+      canvas.width = largeur;
+      canvas.height = hauteur;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, largeur, hauteur);
+      return ctx.getImageData(0, 0, largeur, hauteur).data;  // [R, G, B, A, R, G, B, A, ...]
+    }
+
+    // ---------- 3. Construire le nuage de points ----------
+    function afficherNuage(photo, carte) {
+      const l = carte.width;
+      const h = carte.height;
+      const couleursPhoto = lirePixels(photo, l, h);
+      const valeursCarte = lirePixels(carte, l, h);
+      const ratio = photo.naturalWidth / photo.naturalHeight;
+
+      const positions = new Float32Array(l * h * 3);
+      const couleurs = new Float32Array(l * h * 3);
+
+      for (let j = 0; j < h; j++) {
+        for (let i = 0; i < l; i++) {
+          const k = j * l + i;   // numéro du point
+          const p = k * 4;       // position du pixel dans les tableaux RGBA
+
+          positions[3 * k]     = (i / l - 0.5) * ratio;        // x
+          positions[3 * k + 1] = 0.5 - j / h;                  // y
+          positions[3 * k + 2] = valeursCarte[p] / 255 * 0.2;  // z : profondeur
+
+          couleurs[3 * k]     = couleursPhoto[p] / 255;
+          couleurs[3 * k + 1] = couleursPhoto[p + 1] / 255;
+          couleurs[3 * k + 2] = couleursPhoto[p + 2] / 255;
+        }
+      }
+
+      const geometrie = new THREE.BufferGeometry();
+      geometrie.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometrie.setAttribute("color", new THREE.BufferAttribute(couleurs, 3));
+      const materiau = new THREE.PointsMaterial({ size: 0.004, vertexColors: true });
+
+      if (nuage) {                 // supprime le nuage précédent
+        scene.remove(nuage);
+        nuage.geometry.dispose();
+        nuage.material.dispose();
+      }
+      nuage = new THREE.Points(geometrie, materiau);
+      scene.add(nuage);
+    }
+
+    // ---------- 4. Envoyer la photo et afficher le résultat ----------
     async function traiter(fichier) {
       document.getElementById("photo").src = URL.createObjectURL(fichier);
       document.getElementById("statut").textContent = "Calcul en cours…";
@@ -25,10 +142,20 @@
       const formulaire = new FormData();
       formulaire.append("fichier", fichier);
       const reponse = await fetch("/api/depth", { method: "POST", body: formulaire });
-      const carte = await reponse.blob();
 
+      if (!reponse.ok) {
+        document.getElementById("statut").textContent = "Erreur : " + reponse.status;
+        return;
+      }
+
+      const carte = await reponse.blob();
       document.getElementById("carte").src = URL.createObjectURL(carte);
-      document.getElementById("statut").textContent = "Terminé !";
+
+      const photoImg = await chargerImage(fichier);
+      const carteImg = await chargerImage(carte);
+      afficherNuage(photoImg, carteImg);
+
+      document.getElementById("statut").textContent = "Terminé ! Faites tourner la scène à la souris.";
     }
 
     document.getElementById("choix").addEventListener("change", (evenement) => {
@@ -37,8 +164,7 @@
 
     document.getElementById("exemple").addEventListener("click", async () => {
       const reponse = await fetch("DemoImage.png");
-      const fichier = await reponse.blob();
-      traiter(fichier);
+      traiter(await reponse.blob());
     });
   </script>
 </body>
